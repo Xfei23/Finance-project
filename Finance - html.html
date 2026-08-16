@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina | Your Financial Companion</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+  </style>
+
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel for in-browser JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Recharts -->
+  <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, createContext, useContext } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts;
+
+    // --- UTILS & DATA ---
+    const CATEGORY_EDUCATION = {
+      Stocks: { title: "Individual Stocks", description: "Ownership shares in a single public company.", driver: "Driven by company earnings, future growth expectations, and overall economic health." },
+      ETFs: { title: "Exchange Traded Funds", description: "A basket of many stocks or bonds, giving you instant diversification.", driver: "Driven by the collective performance of the underlying assets in the fund." },
+      Crypto: { title: "Cryptocurrency", description: "Digital assets secured by cryptography, operating outside traditional banking.", driver: "Highly volatile; driven by adoption rates, regulatory news, and market sentiment." },
+      RealEstate: { title: "Real Estate (REITs/Property)", description: "Investments in physical properties or trusts that manage real estate.", driver: "Driven by interest rates, housing supply/demand, and local economic growth." },
+      Bonds: { title: "Bonds", description: "Essentially an I-OU. You lend money to a government or corporation for regular interest.", driver: "Prices move inversely to interest rates. When new rates go up, existing bond values go down." },
+      PreciousMetals: { title: "Precious Metals", description: "Physical assets like Gold and Silver.", driver: "Often acts as a 'safe haven'. Driven by inflation fears and a weakening currency." },
+      IntlEquities: { title: "International Equities", description: "Stocks from companies based outside your home country.", driver: "Driven by global trade, geopolitical events, and currency exchange rates." }
+    };
+
+    const MOCK_PRICES = {
+      'AAPL': { ticker: 'AAPL', currentPrice: 175.50, change24h: 1.2 },
+      'VOO': { ticker: 'VOO', currentPrice: 480.20, change24h: 0.8 },
+      'BTC': { ticker: 'BTC', currentPrice: 64200.00, change24h: -2.1 },
+      'VNQ': { ticker: 'VNQ', currentPrice: 85.30, change24h: 0.4 },
+      'BND': { ticker: 'BND', currentPrice: 72.10, change24h: 0.1 },
+      'GLD': { ticker: 'GLD', currentPrice: 215.40, change24h: 0.5 },
+      'VXUS': { ticker: 'VXUS', currentPrice: 60.80, change24h: -0.3 },
+    };
+
+    async function fetchPrice(ticker, category) {
+      const upperTicker = ticker.toUpperCase();
+      const mockReturn = MOCK_PRICES[upperTicker] || { ticker: upperTicker, currentPrice: 100, change24h: 0 };
+      if (category === 'Crypto') {
+        try {
+          const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ticker.toLowerCase()}&vs_currencies=usd&include_24hr_change=true`);
+          const data = await res.json();
+          const id = Object.keys(data)[0];
+          if (id) return { ticker: upperTicker, currentPrice: data[id].usd, change24h: data[id].usd_24h_change };
+        } catch (e) { console.warn("CoinGecko fetch failed, using fallback."); }
+      }
+      return mockReturn;
+    }
+
+    const mapKeywordsToCategories = (text) => {
+      const lower = text.toLowerCase();
+      const categories = new Set();
+      if (lower.includes('rate') || lower.includes('fed') || lower.includes('inflation')) categories.add('Bonds');
+      if (lower.includes('crypto') || lower.includes('bitcoin') || lower.includes('sec')) categories.add('Crypto');
+      if (lower.includes('housing') || lower.includes('mortgage') || lower.includes('real estate')) categories.add('RealEstate');
+      if (lower.includes('gold') || lower.includes('silver')) categories.add('PreciousMetals');
+      if (lower.includes('europe') || lower.includes('china') || lower.includes('global')) categories.add('IntlEquities');
+      if (lower.includes('stock') || lower.includes('market') || lower.includes('earnings')) {
+        categories.add('Stocks'); categories.add('ETFs');
+      }
+      return Array.from(categories);
+    };
+
+    async function fetchNews() {
+      return [
+        { title: "Federal Reserve Indicates Potential Rate Cuts Later This Year", description: "Inflation shows signs of cooling, prompting speculation that the central bank may lower borrowing costs.", url: "#", publishedAt: new Date().toISOString(), source: { name: "Financial Times Mock" }, relatedCategories: ['Bonds', 'RealEstate', 'Stocks'] },
+        { title: "Bitcoin Surges Past Key Resistance Level Amid Regulatory Clarity", description: "Cryptocurrency markets rally as new global frameworks provide certainty for institutional investors.", url: "#", publishedAt: new Date().toISOString(), source: { name: "Crypto News Mock" }, relatedCategories: ['Crypto'] },
+        { title: "Housing Market Inventory Remains Historically Low", description: "First-time buyers struggle as property owners hold onto low mortgage rates, restricting supply.", url: "#", publishedAt: new Date().toISOString(), source: { name: "Real Estate Journal Mock" }, relatedCategories: ['RealEstate'] }
+      ];
+    }
+
+    // --- STATE MANAGEMENT (Context instead of Zustand for CDN reliability) ---
+    const PortfolioContext = createContext();
+    const PortfolioProvider = ({ children }) => {
+      const [holdings, setHoldings] = useState([
+        { id: '1', category: 'Stocks', ticker: 'AAPL', name: 'Apple Inc.', quantity: 10, purchasePrice: 150 },
+        { id: '2', category: 'ETFs', ticker: 'VOO', name: 'Vanguard S&P 500', quantity: 5, purchasePrice: 400 },
+        { id: '3', category: 'Bonds', ticker: 'BND', name: 'Total Bond Market', quantity: 20, purchasePrice: 70 },
+      ]);
+
+      const addHolding = (holding) => setHoldings(prev => [...prev, { ...holding, id: Math.random().toString(36).substr(2, 9) }]);
+      const removeHolding = (id) => setHoldings(prev => prev.filter(h => h.id !== id));
+
+      return (
+        <PortfolioContext.Provider value={{ holdings, addHolding, removeHolding }}>
+          {children}
+        </PortfolioContext.Provider>
+      );
+    };
+    const usePortfolioStore = () => useContext(PortfolioContext);
+
+    // --- ICONS ---
+    const IconBook = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>;
+    const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>;
+    const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+    const IconTrendingUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>;
+    const IconTrendingDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>;
+    const IconRefresh = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>;
+    const IconCalculator = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>;
+    const IconNewspaper = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8V6Z"></path></svg>;
+
+    // --- COMPONENTS ---
+    function EducationalCard({ category }) {
+      const content = CATEGORY_EDUCATION[category];
+      return (
+        <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 flex gap-4 items-start">
+          <div className="bg-brand-100 p-2 rounded-lg text-brand-600 mt-1"><IconBook /></div>
+          <div>
+            <h4 className="font-semibold text-brand-900">{content.title}</h4>
+            <p className="text-sm text-brand-800 mt-1">{content.description}</p>
+            <div className="mt-2 text-sm bg-white bg-opacity-60 p-2 rounded text-brand-900 italic">
+              <span className="font-semibold">What drives value:</span> {content.driver}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function PortfolioBuilder() {
+      const { addHolding } = usePortfolioStore();
+      const [category, setCategory] = useState("Stocks");
+      const [ticker, setTicker] = useState("");
+      const [name, setName] = useState("");
+      const [quantity, setQuantity] = useState("");
+      const [price, setPrice] = useState("");
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!ticker || !quantity || !price) return;
+        addHolding({ category, ticker: ticker.toUpperCase(), name: name || ticker.toUpperCase(), quantity: Number(quantity), purchasePrice: Number(price) });
+        setTicker(""); setName(""); setQuantity(""); setPrice("");
+      };
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">Add New Asset</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Asset Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="Stocks">Stocks</option><option value="ETFs">ETFs</option><option value="Crypto">Crypto (e.g., BTC, ETH)</option>
+                <option value="RealEstate">Real Estate (REITs)</option><option value="Bonds">Bonds</option><option value="PreciousMetals">Precious Metals</option>
+                <option value="IntlEquities">International Equities</option>
+              </select>
+            </div>
+            <EducationalCard category={category} />
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="block text-sm font-medium text-slate-600 mb-1">Ticker/Symbol</label><input required type="text" placeholder="e.g. AAPL" value={ticker} onChange={(e) => setTicker(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500"/></div>
+              <div><label className="block text-sm font-medium text-slate-600 mb-1">Friendly Name</label><input type="text" placeholder="Apple Inc." value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500"/></div>
+              <div><label className="block text-sm font-medium text-slate-600 mb-1">Quantity</label><input required type="number" step="any" min="0" placeholder="10" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500"/></div>
+              <div><label className="block text-sm font-medium text-slate-600 mb-1">Avg Buy Price ($)</label><input required type="number" step="any" min="0" placeholder="150.00" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500"/></div>
+            </div>
+            <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 rounded-lg flex justify-center items-center gap-2 transition-colors"><IconPlus /> Add to Portfolio</button>
+          </form>
+        </div>
+      );
+    }
+
+    function PortfolioOverview() {
+      const { holdings, removeHolding } = usePortfolioStore();
+      const [prices, setPrices] = useState({});
+      const [loading, setLoading] = useState(true);
+
+      const loadPrices = async () => {
+        setLoading(true);
+        const priceMap = {};
+        for (const h of holdings) {
+          if (!priceMap[h.ticker]) priceMap[h.ticker] = await fetchPrice(h.ticker, h.category);
+        }
+        setPrices(priceMap);
+        setLoading(false);
+      };
+
+      useEffect(() => { loadPrices(); }, [holdings]);
+
+      let totalInvested = 0;
+      let totalCurrentValue = 0;
+
+      const enrichedHoldings = holdings.map(h => {
+        const currentPrice = prices[h.ticker]?.currentPrice || h.purchasePrice;
+        const invested = h.quantity * h.purchasePrice;
+        const current = h.quantity * currentPrice;
+        const gainLoss = current - invested;
+        const gainLossPct = (gainLoss / invested) * 100;
+        totalInvested += invested; totalCurrentValue += current;
+        return { ...h, currentPrice, current, gainLoss, gainLossPct };
+      });
+
+      const totalGainLoss = totalCurrentValue - totalInvested;
+      const totalGainLossPct = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-bold text-slate-800">Your Portfolio</h2>
+            <button onClick={loadPrices} className="text-slate-400 hover:text-brand-600 transition-colors" title="Refresh Prices"><IconRefresh className={loading ? "animate-spin" : ""} /></button>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 flex justify-between items-center border border-slate-100">
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Total Value</p>
+              <p className="text-3xl font-bold text-slate-800">${totalCurrentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className={`text-right ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className="text-sm font-medium text-slate-500 mb-1">All-Time Return</p>
+              <div className="flex items-center justify-end gap-1 font-bold">
+                {totalGainLoss >= 0 ? <IconTrendingUp /> : <IconTrendingDown />}
+                ${Math.abs(totalGainLoss).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                <span className="text-sm font-medium ml-1">({totalGainLossPct.toFixed(2)}%)</span>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto flex-1">
+            {holdings.length === 0 ? <div className="text-center text-slate-500 py-10">Your portfolio is empty. Add assets to begin.</div> : (
+              <table className="w-full text-left border-collapse">
+                <thead><tr className="text-xs uppercase text-slate-400 border-b border-slate-100"><th className="pb-3 font-semibold">Asset</th><th className="pb-3 font-semibold text-right">Qty</th><th className="pb-3 font-semibold text-right">Avg Price</th><th className="pb-3 font-semibold text-right">Current</th><th className="pb-3 font-semibold text-right">Return</th><th className="pb-3 font-semibold text-center">Action</th></tr></thead>
+                <tbody>
+                  {enrichedHoldings.map((h) => (
+                    <tr key={h.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                      <td className="py-3"><div className="font-semibold text-slate-800">{h.ticker}</div><div className="text-xs text-slate-500">{h.name}</div></td>
+                      <td className="py-3 text-right text-slate-700">{h.quantity}</td>
+                      <td className="py-3 text-right text-slate-700">${h.purchasePrice.toFixed(2)}</td>
+                      <td className="py-3 text-right font-medium text-slate-800">${h.currentPrice.toFixed(2)}</td>
+                      <td className={`py-3 text-right font-medium ${h.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>{h.gainLoss >= 0 ? '+' : ''}{h.gainLossPct.toFixed(2)}%</td>
+                      <td className="py-3 text-center"><button onClick={() => removeHolding(h.id)} className="text-slate-300 hover:text-red-500 transition-colors"><IconTrash /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function ForecastingTool() {
+      const { holdings } = usePortfolioStore();
+      const currentTotal = holdings.reduce((sum, h) => sum + (h.quantity * h.purchasePrice), 0);
+      const [years, setYears] = useState(10);
+      const [monthlyContribution, setMonthlyContribution] = useState(500);
+      const [expectedReturn, setExpectedReturn] = useState(7);
+      const [inflationRate, setInflationRate] = useState(2.5);
+
+      const forecastData = useMemo(() => {
+        const data = [];
+        const realReturnRate = (expectedReturn - inflationRate) / 100;
+        const monthlyRate = realReturnRate / 12;
+        let currentVal = currentTotal;
+        let nominalVal = currentTotal;
+        const currentYear = new Date().getFullYear();
+        for (let i = 0; i <= years; i++) {
+          data.push({ year: currentYear + i, "Inflation-Adjusted Value": Math.round(currentVal), "Nominal Value": Math.round(nominalVal) });
+          for(let m = 0; m < 12; m++) {
+            currentVal = currentVal * (1 + monthlyRate) + monthlyContribution;
+            nominalVal = nominalVal * (1 + (expectedReturn/100)/12) + monthlyContribution;
+          }
+        }
+        return data;
+      }, [currentTotal, years, monthlyContribution, expectedReturn, inflationRate]);
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center gap-2 mb-6"><div className="text-brand-500"><IconCalculator /></div><h2 className="text-lg font-bold text-slate-800">Growth Forecaster</h2></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div><label className="block text-sm font-medium text-slate-600 mb-1">Time Horizon (Years): {years}</label><input type="range" min="1" max="40" value={years} onChange={(e) => setYears(Number(e.target.value))} className="w-full accent-brand-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-600 mb-1">Monthly Add ($): {monthlyContribution}</label><input type="range" min="0" max="5000" step="50" value={monthlyContribution} onChange={(e) => setMonthlyContribution(Number(e.target.value))} className="w-full accent-brand-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-600 mb-1">Expected Return: {expectedReturn}%</label><input type="range" min="1" max="15" step="0.5" value={expectedReturn} onChange={(e) => setExpectedReturn(Number(e.target.value))} className="w-full accent-brand-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-600 mb-1">Inflation Rate: {inflationRate}%</label><input type="range" min="0" max="10" step="0.5" value={inflationRate} onChange={(e) => setInflationRate(Number(e.target.value))} className="w-full accent-brand-500" /></div>
+          </div>
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6"><p className="text-sm text-slate-600"><strong>How this works:</strong> We use <em>Compound Growth</em>. By earning a return on your past returns, money snowballs over time. The chart shows your real buying power (adjusted for inflation) vs the nominal dollar amount.</p></div>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={forecastData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="year" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+                <Line type="monotone" dataKey="Inflation-Adjusted Value" stroke="#3b82f6" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="Nominal Value" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      );
+    }
+
+    function NewsFeed() {
+      const [news, setNews] = useState([]);
+      const { holdings } = usePortfolioStore();
+      const userCategories = new Set(holdings.map(h => h.category));
+
+      useEffect(() => { fetchNews().then(setNews); }, []);
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center gap-2 mb-6"><div className="text-brand-500"><IconNewspaper /></div><h2 className="text-lg font-bold text-slate-800">World Events & Impact</h2></div>
+          <div className="space-y-4">
+            {news.length === 0 ? <p className="text-slate-500 text-sm">Loading market news...</p> : (
+              news.map((article, i) => {
+                const impactCategories = article.relatedCategories.filter(c => userCategories.has(c));
+                return (
+                  <div key={i} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                    <a href={article.url} target="_blank" rel="noreferrer" className="group">
+                      <h3 className="font-semibold text-slate-800 group-hover:text-brand-600 transition-colors flex items-start justify-between"><span>{article.title}</span></h3>
+                      <p className="text-sm text-slate-500 mt-1 line-clamp-2">{article.description}</p>
+                    </a>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-slate-400">{article.source.name} • Recent</span>
+                      {impactCategories.length > 0 && (
+                        <div className="flex gap-1">{impactCategories.map(cat => <span key={cat} className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">Impacts {cat}</span>)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-100"><p className="text-xs text-slate-400 italic">News categories are mapped based on keywords. If a category is highlighted in yellow, you own assets that might be affected by this event.</p></div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <div className="min-h-screen">
+          <nav className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold">L</div>
+              <span className="text-xl font-semibold text-slate-800">Lumina Finance</span>
+            </div>
+            <div className="text-sm text-slate-500 font-medium">Educational Dashboard</div>
+          </nav>
+          <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2"><PortfolioOverview /></div>
+              <div className="lg:col-span-1"><PortfolioBuilder /></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2"><ForecastingTool /></div>
+              <div className="lg:col-span-1"><NewsFeed /></div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<PortfolioProvider><App /></PortfolioProvider>);
+  </script>
+</body>
+</html>
