@@ -39,9 +39,9 @@
   <!-- Babel for in-browser JSX compilation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Recharts -->
+  <!-- Recharts and PropTypes (Pinned to stable version 2.1.12) -->
   <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/recharts@2.1.12/umd/Recharts.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -107,7 +107,7 @@
       ];
     }
 
-    // --- STATE MANAGEMENT (Context instead of Zustand for CDN reliability) ---
+    // --- STATE MANAGEMENT ---
     const PortfolioContext = createContext();
     const PortfolioProvider = ({ children }) => {
       const [holdings, setHoldings] = useState([
